@@ -34,20 +34,54 @@ VOID CALLBACK notification(
     }
 }
 
+uint32_t mode  = 0;
+uint32_t count = 0;
+
+PVIGEM_CLIENT  client  = nullptr;
+PVIGEM_TARGET* targets = nullptr;
+
+BOOL WINAPI signal_handler(_In_ DWORD sign)
+{
+    if (sign != CTRL_C_EVENT) {
+        return false;
+    }
+
+    if (targets) {
+        for (size_t i = 0; i < count; ++i) {
+
+            if (mode == 1) {
+                vigem_target_x360_unregister_notification(targets[i]);
+            }
+
+            vigem_target_remove(client, targets[i]);
+            vigem_target_free(targets[i]);
+
+            targets[i] = nullptr;
+        }
+
+        free(targets);
+
+        targets = nullptr;
+    }
+
+    if (client) {
+        vigem_free(client);
+
+        client = nullptr;
+    }
+
+    return true;
+}
+
 int main()
 {
-    uint32_t mode = 0;
-    uint32_t count = 0;
+    VIGEM_ERROR result;
 
-    (void)printf ("Please select mode: 1. XBOX 360; 2. DS4");
+    (void)printf ("Please select mode (1. XBOX 360; 2. DS4 ): ");
     (void)scanf_s("%u", &mode);
 
-    (void)printf ("Please input count(count <= 32): ");
+    (void)printf ("Please input count (count <= 32): ");
     (void)scanf_s("%u", &count);
-
-    VIGEM_ERROR    result  = VIGEM_ERROR_NONE;
-    PVIGEM_CLIENT  client  = nullptr;
-    PVIGEM_TARGET* targets = nullptr;
 
     do {
         if (mode != 1 && mode != 2) {
@@ -57,6 +91,11 @@ int main()
 
         if (count > 32) {
             result = VIGEM_ERROR_INVALID_PARAMETER;
+            break;
+        }
+
+        if (!SetConsoleCtrlHandler(signal_handler, true)) {
+            result = (VIGEM_ERROR)GetLastError();
             break;
         }
 
@@ -90,14 +129,14 @@ int main()
             break;
         }
 
-        (void)printf("press any key to test send (escape end)...");
+        (void)printf("press any key to test send (escape end)... \n");
         (void)getchar();
 
         if (mode == 1) {
             XUSB_REPORT report;
             XUSB_REPORT_INIT(&report);
 
-            while (!(GetAsyncKeyState(VK_ESCAPE) & 0x8000)) {
+            while (!(GetAsyncKeyState(VK_ESCAPE) & 0x8000) && targets) {
                 result = vigem_target_x360_update(client, targets[0], report);
                 report.bLeftTrigger++;
                 Sleep(100);
@@ -107,7 +146,7 @@ int main()
             DS4_REPORT report;
             DS4_REPORT_INIT(&report);
 
-            while (!(GetAsyncKeyState(VK_ESCAPE) & 0x8000)) {
+            while (!(GetAsyncKeyState(VK_ESCAPE) & 0x8000) && targets) {
                 result = vigem_target_ds4_update(client, targets[0], report);
                 report.bThumbLX++;
                 report.wButtons |= DS4_BUTTON_CIRCLE;
@@ -115,28 +154,11 @@ int main()
             }
         }
 
-        (void)printf("press any key to exit...");
+        (void)printf("press any key to exit... \n");
         (void)getchar();
 
     } while (false);
 
-    if (targets) {
-        for (size_t i = 0; i < count; ++i) {
-
-            if (mode == 1) {
-                vigem_target_x360_unregister_notification(targets[i]);
-            }
-
-            vigem_target_remove(client, targets[i]);
-            vigem_target_free(targets[i]);
-        }
-
-        free(targets);
-    }
-
-    if (client) {
-        vigem_free(client);
-    }
-
+    GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0);
     return result;
 }
