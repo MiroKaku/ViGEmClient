@@ -51,6 +51,11 @@ SOFTWARE.
 // 
 #include "Internal.h"
 
+//
+// Library
+//
+#pragma comment(lib, "Setupapi.lib")
+
 //#define VIGEM_VERBOSE_LOGGING_ENABLED
 
 
